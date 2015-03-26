@@ -1,8 +1,8 @@
 {
   "cwd": ".",
   "src": [
-    "/**/*.*",
-    "index_1.html",
+    "template/index.html",
+    "template/aaa/index.html",
     "index.html"
   ],
   "queryKeyName": "",

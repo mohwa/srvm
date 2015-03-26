@@ -1,4 +1,5 @@
 var fs = require('fs');
+var _path = require('path');
 
 process.on('uncaughtException', function (err) {
 
@@ -21,28 +22,80 @@ var checkFileType = config.types;
 
 eachFileText(checkFiles, function(text, path){
 
-    var cssPtn = /[\n\r\t ]*(<link.*?href.*?\=.*?['"])(.*?)(['"].*?>)[\n\r\t ]*/gi;
+    var cssPattern = /[\n\r\t ]*(<link.*?href.*?\=.*?['"])(.*?)(['"].*?>)[\n\r\t ]*/gi;
     var scriptPtn = /[\n\r\t ]*(<script.*?src.*?\=.*?['"])(.*?)(['"].*?>)[\n\r\t ]*/gi;
     var imgPtn = /[\n\r\t ]*(<img.*?src.*?\=.*?['"])(.*?)(['"].*?>)[\n\r\t ]*/gi;
 
     if (checkFileType.isCSS){
 
-        text = text.replace(cssPtn, function(a, $1, $2, $3) {
-            return '\n' + $1 + getUpdateVersionFilePath($2) + $3;
+        text = text.replace(cssPattern, function($0, $1, $2, $3) {
+
+            // link 태그의 css file path
+            var cssFilePath = $2;
+
+            // 체크 파일의 디렉토리
+            var chkFilePath = _path.dirname(path);
+
+            // css file 의 절대 경로
+            var logicalCssPath = _path.resolve(chkFilePath, cssFilePath.split('?')[0]);
+
+            var cssText = fs.readFileSync(logicalCssPath, 'utf8');
+            //
+            var cssImgPattern = /[\n\r\t ]*(background.*?url.*?\(.*?['"])([^\:]*)(['"].*?\))[\n\r\t ]*/gi;
+
+            cssText = cssText.replace(cssImgPattern, function($0, $1, $2, $3) {
+
+                // css file 내부의 background url image path
+                var imgPath = $2;
+
+                // 체크 css 파일의 디렉토리
+                var chkCssFilePath = _path.dirname(logicalCssPath);
+
+                // img 파일의 절대 경로
+                var logicalImgPath = _path.resolve(chkCssFilePath, imgPath);
+
+                return $1 + getUpdateVersionFilePath(logicalImgPath, imgPath) + $3;
+            });
+
+            // 이전 css 파일의 내용을 변경된 내용으로 치환 시킨다.
+            setFileText(logicalCssPath, cssText);
+
+
+            return '\n' + $1 + getUpdateVersionFilePath(logicalCssPath, cssFilePath) + $3;
         });
     }
 
     if (checkFileType.isScript) {
 
         text = text.replace(scriptPtn, function (a, $1, $2, $3) {
-            return '\n' + $1 + getUpdateVersionFilePath($2) + $3;
+
+            // link 태그의 css file path
+            var scriptFilePath = $2;
+
+            // 체크 파일의 디렉토리
+            var chkFilePath = _path.dirname(path);
+
+            // css file 의 절대 경로
+            var logicalScriptPath = _path.resolve(chkFilePath, scriptFilePath.split('?')[0]);
+
+            return '\n' + $1 + getUpdateVersionFilePath(logicalScriptPath, scriptFilePath) + $3;
         });
     }
 
     if (checkFileType.isImg){
 
         text = text.replace(imgPtn, function (a, $1, $2, $3) {
-            return '\n' + $1 + getUpdateVersionFilePath($2) + $3;
+
+            // link 태그의 css file path
+            var imageFilePath = $2;
+
+            // 체크 파일의 디렉토리
+            var chkFilePath = _path.dirname(path);
+
+            // css file 의 절대 경로
+            var logicalImagePath = _path.resolve(chkFilePath, imageFilePath.split('?')[0]);
+
+            return '\n' + $1 + getUpdateVersionFilePath(logicalImagePath, imageFilePath) + $3;
         });
     }
 
@@ -54,75 +107,104 @@ eachFileText(checkFiles, function(text, path){
 
 
 
-    // CORE Function
 
-    function getUpdateVersionFilePath(src){
 
-        src = src || '';
+    // core version manager Function
 
-        var ret = src;
+    function getUpdateVersionFilePath(logicalPath, relativePath){
 
-        var hrefValue = src.split('?');
-        var relativeFilePath = hrefValue[0];
+        logicalPath = logicalPath || '';
+        relativePath = relativePath || '';
 
-        var logicalFilePath = cwd + '/' + relativeFilePath;
+        var ret = '';
 
-        var queryString = hrefValue[1];
+        var logicalHrefValue = logicalPath.split('?');
+        var relativeHrefValue = relativePath.split('?');
 
-        if (queryString) {
+        var logicalFilePath = logicalHrefValue[0];
+        var relativeFilePath = relativeHrefValue[0];
 
-            var retQuerys = [];
+        var params = logicalHrefValue[1];
 
-            var querys = queryString.split('&');
+        if (params) {
 
-            for (var n in querys) {
+            var tParams = [];
 
-                var query = querys[n];
+            var isDetectVersion = false;
 
-                var qSplit = query.split('=');
+            params = params.split('&');
 
-                var key = qSplit[0];
-                var value = qSplit[1] || '';
+            for (var n in params) {
 
-                if (key) {
+                var param = params[n];
 
-                    if (key === 'v') {
+                var paramSplit = param.split('=');
 
-                        if (/\d/gi.test(value)) {
+                var key = paramSplit[0];
+                var value = paramSplit[1];
 
-                            var isExists = fs.existsSync(logicalFilePath);
+                if (!key) continue;
 
-                            if (isExists) {
+                if (key === 'v') {
 
-                                var pTime = value;
-                                var cTime = getModifyTime(logicalFilePath);
+                    value = compareFileVersion(logicalFilePath, value);
 
-                                if (pTime < cTime) {
-                                    value = cTime;
-                                }
-                            }
-                        }
-                    }
-
-                    retQuerys.push(key + '=' + value);
+                    isDetectVersion = true;
                 }
+
+                tParams.push(key + '=' + value);
             }
 
-            ret = relativeFilePath + '?' + retQuerys.join('&');
+            ret = relativeFilePath + '?' + tParams.join('&');
+
+            if (!isDetectVersion){
+                ret += '&v=' + getFileVersion(logicalFilePath);
+            }
         }
         else{
 
-            var isExists = fs.existsSync(logicalFilePath);
-
-            if (isExists){
-
-                var cTime = getModifyTime(logicalFilePath);
-
-                ret = relativeFilePath + '?v=' + cTime;
-            }
+            ret = relativeFilePath + '?v=' + getFileVersion(logicalFilePath);
         }
 
         return ret;
+
+
+        function getFileVersion(logicalFilePath){
+
+            if (!logicalFilePath) return '';
+
+            var ret = '';
+
+            var isExists = fs.existsSync(logicalFilePath);
+
+            if (isExists) {
+                ret = getModifyTime(logicalFilePath);
+            }
+
+            return ret;
+        };
+
+        function compareFileVersion(logicalFilePath, prevModifyTime){
+
+            if (!logicalFilePath) return '';
+
+            prevModifyTime = (prevModifyTime && prevModifyTime.constructor === Number) ? prevModifyTime : 0;
+
+            var ret = prevModifyTime;
+
+            var isExists = fs.existsSync(logicalFilePath);
+
+            if (isExists) {
+
+                var currentModifyTime = getModifyTime(logicalFilePath);
+
+                if (prevModifyTime < currentModifyTime) {
+                    ret = currentModifyTime;
+                }
+            }
+
+            return ret;
+        };
     };
 
     function getModifyTime(path){
