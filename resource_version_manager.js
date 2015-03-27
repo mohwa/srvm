@@ -30,7 +30,7 @@ eachFileText(checkFiles, function(text, path){
     var audioPtn2 = /[\n\r\t ]*(\<.*?source.*?src.*?\=.*?['"])(.*?\.(mp4|mp3|ogg|wav)+.*?)(['"].*?\>)[\n\r\t ]*/gi;
 
     var videoPtn1 = /[\n\r\t ]*(\<.*?video.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
-    var videoPtn2 = /[\n\r\t ]*(\<.*?source.*?src.*?\=.*?['"])(.*?\.(mp4|ogv|webm)+.*?)(['"].*?\>)[\n\r\t ]*/gi;
+    var videoPtn2 = /[\n\r\t ]*(\<.*?source.*?src.*?\=.*?['"])(.*?\.(ogv|webm)+.*?)(['"].*?\>)[\n\r\t ]*/gi;
 
     if (checkFileType.isCSS){
 
