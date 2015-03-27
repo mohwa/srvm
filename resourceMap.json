@@ -1,16 +1,16 @@
 {
-  "cwd": ".",
   "src": [
     "template/index.html",
     "template/aaa/index.html",
     "index.html"
   ],
-  "queryKeyName": "",
+  "keyName": "staticVersion",
   "types": {
 
     "isCSS": true,
     "isImg": true,
     "isScript": true,
-    "isFlash": false
+    "isAudio": true,
+    "isVideo": true
   }
 }

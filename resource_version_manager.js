@@ -16,15 +16,21 @@ var setupFilePath = './resourceMap.json';
 
 var config = JSON.parse(getFileText(setupFilePath));
 
-var cwd = config.cwd;
 var checkFiles = config.src;
 var checkFileType = config.types;
+var keyName = config.keyName;
 
 eachFileText(checkFiles, function(text, path){
 
-    var cssPattern = /[\n\r\t ]*(<link.*?href.*?\=.*?['"])(.*?)(['"].*?>)[\n\r\t ]*/gi;
-    var scriptPtn = /[\n\r\t ]*(<script.*?src.*?\=.*?['"])(.*?)(['"].*?>)[\n\r\t ]*/gi;
-    var imgPtn = /[\n\r\t ]*(<img.*?src.*?\=.*?['"])(.*?)(['"].*?>)[\n\r\t ]*/gi;
+    var cssPattern = /[\n\r\t ]*(\<.*?link.*?href.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
+    var scriptPtn = /[\n\r\t ]*(\<.*?script.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
+    var imgPtn = /[\n\r\t ]*(\<.*?img.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
+
+    var audioPtn1 = /[\n\r\t ]*(\<.*?audio.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
+    var audioPtn2 = /[\n\r\t ]*(\<.*?source.*?src.*?\=.*?['"])(.*?\.(mp4|mp3|ogg|wav)+.*?)(['"].*?\>)[\n\r\t ]*/gi;
+
+    var videoPtn1 = /[\n\r\t ]*(\<.*?video.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
+    var videoPtn2 = /[\n\r\t ]*(\<.*?source.*?src.*?\=.*?['"])(.*?\.(mp4|ogv|webm)+.*?)(['"].*?\>)[\n\r\t ]*/gi;
 
     if (checkFileType.isCSS){
 
@@ -69,13 +75,13 @@ eachFileText(checkFiles, function(text, path){
 
         text = text.replace(scriptPtn, function (a, $1, $2, $3) {
 
-            // link 태그의 css file path
+            // link 태그의 script file path
             var scriptFilePath = $2;
 
             // 체크 파일의 디렉토리
             var chkFilePath = _path.dirname(path);
 
-            // css file 의 절대 경로
+            // script file 의 절대 경로
             var logicalScriptPath = _path.resolve(chkFilePath, scriptFilePath.split('?')[0]);
 
             return '\n' + $1 + getUpdateVersionFilePath(logicalScriptPath, scriptFilePath) + $3;
@@ -86,21 +92,80 @@ eachFileText(checkFiles, function(text, path){
 
         text = text.replace(imgPtn, function (a, $1, $2, $3) {
 
-            // link 태그의 css file path
+            // link 태그의 img file path
             var imageFilePath = $2;
 
             // 체크 파일의 디렉토리
             var chkFilePath = _path.dirname(path);
 
-            // css file 의 절대 경로
+            // img file 의 절대 경로
             var logicalImagePath = _path.resolve(chkFilePath, imageFilePath.split('?')[0]);
 
             return '\n' + $1 + getUpdateVersionFilePath(logicalImagePath, imageFilePath) + $3;
         });
     }
 
-    if (checkFileType.isFlash){
+    if (checkFileType.isAudio){
 
+        text = text.replace(audioPtn1, function (a, $1, $2, $3) {
+
+            // link 태그의 audio file path
+            var audioFilePath = $2;
+
+            // 체크 파일의 디렉토리
+            var chkFilePath = _path.dirname(path);
+
+            // audio file 의 절대 경로
+            var logicalAudioPath = _path.resolve(chkFilePath, audioFilePath.split('?')[0]);
+
+            return '\n' + $1 + getUpdateVersionFilePath(logicalAudioPath, audioFilePath) + $3;
+        });
+
+        text = text.replace(audioPtn2, function (a, $1, $2, $3, $4) {
+
+            //console.log($4);
+            //link 태그의 audio file path
+            var audioFilePath = $2;
+
+            // 체크 파일의 디렉토리
+            var chkFilePath = _path.dirname(path);
+
+            // audio file 의 절대 경로
+            var logicalAudioPath = _path.resolve(chkFilePath, audioFilePath.split('?')[0]);
+
+            return '\n' + $1 + getUpdateVersionFilePath(logicalAudioPath, audioFilePath) + $4;
+        });
+    }
+
+    if (checkFileType.isVideo){
+
+        text = text.replace(videoPtn1, function (a, $1, $2, $3) {
+
+            // link 태그의 audio file path
+            var videoFilePath = $2;
+
+            // 체크 파일의 디렉토리
+            var chkFilePath = _path.dirname(path);
+
+            // audio file 의 절대 경로
+            var logicalVideoPath = _path.resolve(chkFilePath, videoFilePath.split('?')[0]);
+
+            return '\n' + $1 + getUpdateVersionFilePath(logicalVideoPath, videoFilePath) + $3;
+        });
+
+        text = text.replace(videoPtn2, function (a, $1, $2, $3, $4) {
+
+            // link 태그의 audio file path
+            var videoFilePath = $2;
+
+            // 체크 파일의 디렉토리
+            var chkFilePath = _path.dirname(path);
+
+            // audio file 의 절대 경로
+            var logicalVideoPath = _path.resolve(chkFilePath, videoFilePath.split('?')[0]);
+
+            return '\n' + $1 + getUpdateVersionFilePath(logicalVideoPath, videoFilePath) + $4;
+        });
     }
 
     setFileText(path, text);
@@ -124,7 +189,7 @@ eachFileText(checkFiles, function(text, path){
         var logicalFilePath = logicalHrefValue[0];
         var relativeFilePath = relativeHrefValue[0];
 
-        var params = logicalHrefValue[1];
+        var params = relativeHrefValue[1];
 
         if (params) {
 
@@ -145,10 +210,9 @@ eachFileText(checkFiles, function(text, path){
 
                 if (!key) continue;
 
-                if (key === 'v') {
+                if (key === keyName) {
 
                     value = compareFileVersion(logicalFilePath, value);
-
                     isDetectVersion = true;
                 }
 
@@ -158,12 +222,12 @@ eachFileText(checkFiles, function(text, path){
             ret = relativeFilePath + '?' + tParams.join('&');
 
             if (!isDetectVersion){
-                ret += '&v=' + getFileVersion(logicalFilePath);
+                ret += '&' + keyName + '=' + getFileVersion(logicalFilePath);
             }
         }
         else{
 
-            ret = relativeFilePath + '?v=' + getFileVersion(logicalFilePath);
+            ret = relativeFilePath + '?' + keyName + '=' + getFileVersion(logicalFilePath);
         }
 
         return ret;
