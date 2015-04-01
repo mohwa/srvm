@@ -1,13 +1,12 @@
 {
   "src": [
     "template/index.html",
-    "template/aaa/index.html",
     "index.html"
   ],
-  "keyName": "staticVersion",
+  "keyName": "version",
   "types": {
 
-    "isCSS": true,
+    "isStyle": true,
     "isImg": true,
     "isScript": true,
     "isAudio": true,

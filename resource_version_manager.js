@@ -1,5 +1,7 @@
 var fs = require('fs');
+var http = require('http');
 var _path = require('path');
+var punycode = require('punycode');
 
 process.on('uncaughtException', function (err) {
 
@@ -12,277 +14,331 @@ process.on('uncaughtException', function (err) {
 });
 
 var setupFilePath = './resourceMap.json';
+var emojiMapFilePath = './emoji_pretty.json';
 
 
 var config = JSON.parse(getFileText(setupFilePath));
+var emojiMap = JSON.parse(getFileText(emojiMapFilePath));
+var types = config.types;
 
-var checkFiles = config.src;
-var checkFileType = config.types;
-var keyName = config.keyName;
+eachFileText(config.src, function (text, path) {
 
-eachFileText(checkFiles, function(text, path){
+    var linkElemPtn = /(?:(\<link.*?href\=.*?['"])(.*?)(['"].*?\/?\>))+/gi;
+    var scriptElemPtn = /(?:(\<script.*?src\=.*?['"])(.*?)(['"].*?\>\s*\<\/script.*?\>))+/gi;
+    var imgElemPtn = /(?:(\<img.*?src\=.*?['"])(.*?)(['"].*?\/?\>))+/gi;
 
-    var cssPattern = /[\n\r\t ]*(\<.*?link.*?href.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
-    var scriptPtn = /[\n\r\t ]*(\<.*?script.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
-    var imgPtn = /[\n\r\t ]*(\<.*?img.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
+    var audioElemPtn = /(?:(\<audio.*?src\=.*?['"])(.*?)(['"].*?\>))+/gi;
+    var audioSourceElemPtn = /(\<audio.*?\>)((?:\s*\<source.*?src\=['"](.*?)['"].*?\/?\>\s*)+)(\<\/audio.*?\>)/gi;
 
-    var audioPtn1 = /[\n\r\t ]*(\<.*?audio.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
-    var audioPtn2 = /[\n\r\t ]*(\<.*?source.*?src.*?\=.*?['"])(.*?\.(mp4|mp3|ogg|wav)+.*?)(['"].*?\>)[\n\r\t ]*/gi;
+    var srcPtn = /(.*?src\=['"])(.*?)(['"].*?\/?\>)/gi;
 
-    var videoPtn1 = /[\n\r\t ]*(\<.*?video.*?src.*?\=.*?['"])(.*?)(['"].*?\>)[\n\r\t ]*/gi;
-    var videoPtn2 = /[\n\r\t ]*(\<.*?source.*?src.*?\=.*?['"])(.*?\.(ogv|webm)+.*?)(['"].*?\>)[\n\r\t ]*/gi;
+    var videoElemPtn = /(?:(\<video.*?src\=.*?['"])(.*?)(['"].*?\>))+/gi;
+    var videoSourceElemPtn = /(\<video.*?\>)((?:\s*\<source.*?src\=['"](.*?)['"].*?\/?\>\s*)+)(\<\/video.*?\>)/gi;
 
-    if (checkFileType.isCSS){
+    // 현재 디렉토리
+    var currentDir = _path.dirname(path);
 
-        text = text.replace(cssPattern, function($0, $1, $2, $3) {
+    if (types.isStyle) {
 
+        var replaceStyleText = function () {
+
+            var originalText = arguments[0];
             // link 태그의 css file path
-            var cssFilePath = $2;
-
-            // 체크 파일의 디렉토리
-            var chkFilePath = _path.dirname(path);
+            var cssFilePath = arguments[2];
 
             // css file 의 절대 경로
-            var logicalCssPath = _path.resolve(chkFilePath, cssFilePath.split('?')[0]);
+            // http://nodejs.sideeffect.kr/docs/v0.10.35/api/path.html#path_path_resolve_from_to
+            var absoluteCssFilePath = _path.resolve(currentDir, cssFilePath.split('?')[0]);
 
-            var cssText = fs.readFileSync(logicalCssPath, 'utf8');
-            //
-            var cssImgPattern = /[\n\r\t ]*(background.*?url.*?\(.*?['"])([^\:]*)(['"].*?\))[\n\r\t ]*/gi;
+            var isExists = exists(absoluteCssFilePath);
 
-            cssText = cssText.replace(cssImgPattern, function($0, $1, $2, $3) {
+            if (!isExists) return originalText;
+
+            var backgroundImgPtn = /\s*(?:(background.*?url.*?\(.*?['"])([^\:]*)(['"].*?\)))+\s*/gi;
+
+            var innerText = getFileText(absoluteCssFilePath);
+            innerText = innerText.replace(backgroundImgPtn, function () {
 
                 // css file 내부의 background url image path
-                var imgPath = $2;
-
-                // 체크 css 파일의 디렉토리
-                var chkCssFilePath = _path.dirname(logicalCssPath);
+                var imgPath = arguments[2];
 
                 // img 파일의 절대 경로
-                var logicalImgPath = _path.resolve(chkCssFilePath, imgPath);
+                var absoluteImgPath = _path.resolve(_path.dirname(absoluteCssFilePath), imgPath);
 
-                return $1 + getUpdateVersionFilePath(logicalImgPath, imgPath) + $3;
+                return arguments[1] + getUpdateVersionFilePath(absoluteImgPath, imgPath) + arguments[3];
             });
 
             // 이전 css 파일의 내용을 변경된 내용으로 치환 시킨다.
-            setFileText(logicalCssPath, cssText);
 
+            setFileText(absoluteCssFilePath, innerText);
 
-            return '\n' + $1 + getUpdateVersionFilePath(logicalCssPath, cssFilePath) + $3;
-        });
+            return arguments[1] + getUpdateVersionFilePath(absoluteCssFilePath, cssFilePath) + arguments[3];
+        };
+
+        text = text.replace(linkElemPtn, replaceStyleText);
     }
 
-    if (checkFileType.isScript) {
+    if (types.isScript) {
 
-        text = text.replace(scriptPtn, function (a, $1, $2, $3) {
+        text = text.replace(scriptElemPtn, function () {
+
+            var originalText = arguments[0];
 
             // link 태그의 script file path
-            var scriptFilePath = $2;
+            var scriptFilePath = arguments[2];
 
             // 체크 파일의 디렉토리
-            var chkFilePath = _path.dirname(path);
-
             // script file 의 절대 경로
-            var logicalScriptPath = _path.resolve(chkFilePath, scriptFilePath.split('?')[0]);
+            var absoluteScriptFilePath = _path.resolve(currentDir, scriptFilePath.split('?')[0]);
 
-            return '\n' + $1 + getUpdateVersionFilePath(logicalScriptPath, scriptFilePath) + $3;
+            var isExists = exists(absoluteScriptFilePath);
+
+            if (!isExists) return originalText;
+
+            return arguments[1] + getUpdateVersionFilePath(absoluteScriptFilePath, scriptFilePath) + arguments[3];
         });
     }
 
-    if (checkFileType.isImg){
+    if (types.isImg) {
 
-        text = text.replace(imgPtn, function (a, $1, $2, $3) {
+        text = text.replace(imgElemPtn, function () {
 
-            // link 태그의 img file path
-            var imageFilePath = $2;
+            var originalText = arguments[0];
+
+            // link 태그의 script file path
+            var imgFilePath = arguments[2];
 
             // 체크 파일의 디렉토리
-            var chkFilePath = _path.dirname(path);
+            // script file 의 절대 경로
+            var absoluteImgFilePath = _path.resolve(currentDir, imgFilePath.split('?')[0]);
 
-            // img file 의 절대 경로
-            var logicalImagePath = _path.resolve(chkFilePath, imageFilePath.split('?')[0]);
+            var isExists = exists(absoluteImgFilePath);
 
-            return '\n' + $1 + getUpdateVersionFilePath(logicalImagePath, imageFilePath) + $3;
+            if (!isExists) return originalText;
+
+            return arguments[1] + getUpdateVersionFilePath(absoluteImgFilePath, imgFilePath) + arguments[3];
         });
     }
 
-    if (checkFileType.isAudio){
 
-        text = text.replace(audioPtn1, function (a, $1, $2, $3) {
+    if (types.isAudio) {
 
-            // link 태그의 audio file path
-            var audioFilePath = $2;
+        text = text.replace(audioElemPtn, function () {
+
+            var originalText = arguments[0];
+
+            // link 태그의 script file path
+            var audioFilePath = arguments[2];
 
             // 체크 파일의 디렉토리
-            var chkFilePath = _path.dirname(path);
+            // script file 의 절대 경로
+            var absoluteAudioFilePath = _path.resolve(currentDir, audioFilePath.split('?')[0]);
 
-            // audio file 의 절대 경로
-            var logicalAudioPath = _path.resolve(chkFilePath, audioFilePath.split('?')[0]);
+            var isExists = exists(absoluteAudioFilePath);
 
-            return '\n' + $1 + getUpdateVersionFilePath(logicalAudioPath, audioFilePath) + $3;
+            if (!isExists) return originalText;
+
+            return arguments[1] + getUpdateVersionFilePath(absoluteAudioFilePath, audioFilePath) + arguments[3];
         });
 
-        text = text.replace(audioPtn2, function (a, $1, $2, $3, $4) {
+        text = text.replace(audioSourceElemPtn, function () {
 
-            //console.log($4);
-            //link 태그의 audio file path
-            var audioFilePath = $2;
+            var searchSrc = function () {
 
-            // 체크 파일의 디렉토리
-            var chkFilePath = _path.dirname(path);
+                var originalText = arguments[0];
 
-            // audio file 의 절대 경로
-            var logicalAudioPath = _path.resolve(chkFilePath, audioFilePath.split('?')[0]);
+                //link 태그의 audio file path
+                var sourceFilePath = arguments[2];
 
-            return '\n' + $1 + getUpdateVersionFilePath(logicalAudioPath, audioFilePath) + $4;
-        });
-    }
+                // audio file 의 절대 경로
+                var absoluteAudioSourceFilePath = _path.resolve(currentDir, sourceFilePath.split('?')[0]);
 
-    if (checkFileType.isVideo){
+                var isExists = exists(absoluteAudioSourceFilePath);
 
-        text = text.replace(videoPtn1, function (a, $1, $2, $3) {
+                if (!isExists) return originalText;
 
-            // link 태그의 audio file path
-            var videoFilePath = $2;
+                return arguments[1] + getUpdateVersionFilePath(absoluteAudioSourceFilePath, sourceFilePath) + arguments[3];
+            };
 
-            // 체크 파일의 디렉토리
-            var chkFilePath = _path.dirname(path);
+            // link 태그의 script file path
+            var sourceFilePath = arguments[2];
 
-            // audio file 의 절대 경로
-            var logicalVideoPath = _path.resolve(chkFilePath, videoFilePath.split('?')[0]);
-
-            return '\n' + $1 + getUpdateVersionFilePath(logicalVideoPath, videoFilePath) + $3;
-        });
-
-        text = text.replace(videoPtn2, function (a, $1, $2, $3, $4) {
-
-            // link 태그의 audio file path
-            var videoFilePath = $2;
-
-            // 체크 파일의 디렉토리
-            var chkFilePath = _path.dirname(path);
-
-            // audio file 의 절대 경로
-            var logicalVideoPath = _path.resolve(chkFilePath, videoFilePath.split('?')[0]);
-
-            return '\n' + $1 + getUpdateVersionFilePath(logicalVideoPath, videoFilePath) + $4;
+            return arguments[1] + sourceFilePath.replace(srcPtn, searchSrc) + arguments[4];
         });
     }
 
+    if (types.isVideo) {
+
+        text = text.replace(videoElemPtn, function () {
+
+            var originalText = arguments[0];
+
+            // link 태그의 script file path
+            var videoFilePath = arguments[2];
+
+            // 체크 파일의 디렉토리
+            // script file 의 절대 경로
+            var absoluteVideoFilePath = _path.resolve(currentDir, videoFilePath.split('?')[0]);
+
+            var isExists = exists(absoluteVideoFilePath);
+
+            if (!isExists) return originalText;
+
+
+            return arguments[1] + getUpdateVersionFilePath(absoluteVideoFilePath, videoFilePath) + arguments[3];
+        });
+
+        text = text.replace(videoSourceElemPtn, function () {
+
+            var searchSrc = function () {
+
+                var originalText = arguments[0];
+
+                //link 태그의 audio file path
+                var sourceFilePath = arguments[2];
+
+                // audio file 의 절대 경로
+                var absoluteVideoSourceFilePath = _path.resolve(currentDir, sourceFilePath.split('?')[0]);
+
+                var isExists = exists(absoluteVideoSourceFilePath);
+
+                if (!isExists) return originalText;
+
+                return arguments[1] + getUpdateVersionFilePath(absoluteVideoSourceFilePath, sourceFilePath) + arguments[3];
+            };
+
+            // link 태그의 script file path
+            var sourceFilePath = arguments[2];
+
+            return arguments[1] + sourceFilePath.replace(srcPtn, searchSrc) + arguments[4];
+        });
+    }
+
+    // 치환된 모든 체크 파일을 초기화한다.
     setFileText(path, text);
 
+    var emojis = getEmojisCodePoint(['beers', 'four_leaf_clover', 'smile', 'boy', 'clap']);
+    console.log('update file: ' + path + ' ' + emojis[Math.floor(Math.random() * 5)]);
+});
 
 
 
+// core version manager Function
 
-    // core version manager Function
+function getUpdateVersionFilePath(logicalPath, relativePath){
 
-    function getUpdateVersionFilePath(logicalPath, relativePath){
+    logicalPath = logicalPath || '';
+    relativePath = relativePath || '';
 
-        logicalPath = logicalPath || '';
-        relativePath = relativePath || '';
+    var keyName = config.keyName;
+
+    var ret = '';
+
+    var logicalHrefValue = logicalPath.split('?');
+    var relativeHrefValue = relativePath.split('?');
+
+    var logicalFilePath = logicalHrefValue[0];
+    var relativeFilePath = relativeHrefValue[0];
+
+    var params = relativeHrefValue[1];
+
+    if (params) {
+
+        var tParams = [];
+
+        var isDetectVersion = false;
+
+        params = params.split('&');
+
+        for (var n in params) {
+
+            var param = params[n];
+
+            var paramSplit = param.split('=');
+
+            var key = paramSplit[0];
+            var value = paramSplit[1];
+
+            if (!key) continue;
+
+            if (key === keyName) {
+
+                value = compareFileVersion(logicalFilePath, value);
+                isDetectVersion = true;
+            }
+
+            tParams.push(key + '=' + value);
+        }
+
+        ret = relativeFilePath + '?' + tParams.join('&');
+
+        if (!isDetectVersion){
+            ret += '&' + keyName + '=' + getFileVersion(logicalFilePath);
+        }
+    }
+    else{
+
+        ret = relativeFilePath + '?' + keyName + '=' + getFileVersion(logicalFilePath);
+    }
+
+    return ret;
+
+
+    function getFileVersion(logicalFilePath){
+
+        if (!logicalFilePath) return '';
 
         var ret = '';
 
-        var logicalHrefValue = logicalPath.split('?');
-        var relativeHrefValue = relativePath.split('?');
+        var isExists = exists(logicalFilePath);
 
-        var logicalFilePath = logicalHrefValue[0];
-        var relativeFilePath = relativeHrefValue[0];
-
-        var params = relativeHrefValue[1];
-
-        if (params) {
-
-            var tParams = [];
-
-            var isDetectVersion = false;
-
-            params = params.split('&');
-
-            for (var n in params) {
-
-                var param = params[n];
-
-                var paramSplit = param.split('=');
-
-                var key = paramSplit[0];
-                var value = paramSplit[1];
-
-                if (!key) continue;
-
-                if (key === keyName) {
-
-                    value = compareFileVersion(logicalFilePath, value);
-                    isDetectVersion = true;
-                }
-
-                tParams.push(key + '=' + value);
-            }
-
-            ret = relativeFilePath + '?' + tParams.join('&');
-
-            if (!isDetectVersion){
-                ret += '&' + keyName + '=' + getFileVersion(logicalFilePath);
-            }
-        }
-        else{
-
-            ret = relativeFilePath + '?' + keyName + '=' + getFileVersion(logicalFilePath);
+        if (isExists) {
+            ret = getModifyTime(logicalFilePath);
         }
 
         return ret;
-
-
-        function getFileVersion(logicalFilePath){
-
-            if (!logicalFilePath) return '';
-
-            var ret = '';
-
-            var isExists = fs.existsSync(logicalFilePath);
-
-            if (isExists) {
-                ret = getModifyTime(logicalFilePath);
-            }
-
-            return ret;
-        };
-
-        function compareFileVersion(logicalFilePath, prevModifyTime){
-
-            if (!logicalFilePath) return '';
-
-            prevModifyTime = (prevModifyTime && prevModifyTime.constructor === Number) ? prevModifyTime : 0;
-
-            var ret = prevModifyTime;
-
-            var isExists = fs.existsSync(logicalFilePath);
-
-            if (isExists) {
-
-                var currentModifyTime = getModifyTime(logicalFilePath);
-
-                if (prevModifyTime < currentModifyTime) {
-                    ret = currentModifyTime;
-                }
-            }
-
-            return ret;
-        };
     };
 
-    function getModifyTime(path){
+    function compareFileVersion(logicalFilePath, prevModifyTime){
 
-        path = path || '';
+        if (!logicalFilePath) return '';
 
-        var status = fs.statSync(path);
+        prevModifyTime = (prevModifyTime && prevModifyTime.constructor === Number) ? prevModifyTime : '';
 
-        var mtime = status.mtime.getTime();
+        var ret = prevModifyTime;
 
-        return mtime;
+        var isExists = exists(logicalFilePath);
+
+        if (isExists) {
+
+            var currentModifyTime = getModifyTime(logicalFilePath);
+
+            if (prevModifyTime < currentModifyTime) {
+                ret = currentModifyTime;
+            }
+        }
+
+        return ret;
     };
+};
 
-});
+function getModifyTime(path){
+
+    path = path || '';
+
+    var status = fs.statSync(path);
+
+    var mtime = status.mtime.getTime();
+
+    return mtime;
+};
+
+function exists(path){
+
+    path = path || '';
+
+    return fs.existsSync(path) ? true : false;
+};
 
 function getFileText(path){
 
@@ -290,7 +346,7 @@ function getFileText(path){
 
     var text = '';
 
-    var isExists = fs.existsSync(path);
+    var isExists = exists(path);
 
     if (isExists){
         text = fs.readFileSync(path, 'utf8');
@@ -309,7 +365,7 @@ function eachFileText(paths, callback){
 
         var path = paths[i];
 
-        var isExists = fs.existsSync(path);
+        var isExists = exists(path);
 
         if (!isExists) continue;
 
@@ -323,7 +379,7 @@ function eachFileText(paths, callback){
 
 function setFileText(path, string){
 
-    if (fs.existsSync(path)){
+    if (exists(path)){
 
         writeFile(path, string);
     }
@@ -347,3 +403,25 @@ function creteFile(path, string){
 
     fs.appendFileSync(path, string);
 };
+
+function getEmojisCodePoint(emojiNames){
+
+    emojiNames = emojiNames || [];
+
+    var ret = [];
+    for (var key in emojiMap){
+
+        var emoji = emojiMap[key];
+
+        var length = emojiNames.length;
+        for (var i = 0; i < length; i++) {
+
+            if (emoji.short_name === emojiNames[i]) {
+                ret.push(punycode.ucs2.encode(['0x' + String(emoji.unified)]));
+            }
+        }
+    }
+
+    return ret;
+};
+
