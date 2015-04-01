@@ -1,0 +1,15 @@
+{
+  "name": "route.js-file-generator",
+  "version": "0.0.1",
+  "author": "sgjeon",
+  "dependencies": {},
+  "devDependencies": {
+    "punycode": ""
+  },
+  "engines": {
+    "node": ">=0.10.0"
+  },
+  "scripts": {
+    "start": "grunt"
+  }
+}
