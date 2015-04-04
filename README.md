@@ -59,9 +59,9 @@
 
 - css 파일의 경우 Link Element 의 href 링크 및 css 파일 내부 background: url(<span style="color:red">{img link}</span>) 까지 업데이트 된다.
 
-$ npm install
-
-$ node resource_version_manager.js
+	$ npm install
+	
+	$ node resource_version_manager.js
 
 #앞으로 해야할일들...
 
