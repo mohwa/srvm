@@ -1,4 +1,5 @@
 
+== ==
 #SRVM(static resource version manager)
 
 #개발한 이유 ?
@@ -17,10 +18,10 @@
 
 - **resourceMap.json** 파일 설정
 
-	- **src**: resource 버전(file modify date 할당)을 체크하고 싶은 html 경로를 정의한다.
+	- **src* ***: resource 버전(file modify date 할당)을 체크하고 싶은 html 경로를 정의한다.
 
 	- **keyName**: 체크 후 버전이 할당 될 queryString <span style="color:red">{key name}</span> 을 정의한다.
-	```javascript
+	```xml
 	<img src="../resources/img/banner1.png?{keyName}=1424941714000" />
 	```
 	- **types**: 정의된 파일 체크 후 resource 버전을 추가하고 싶은 파일 타입 정의.
@@ -60,9 +61,8 @@
 - css 파일의 경우 Link Element 의 href 링크 및 css 파일 내부 background: url(<span style="color:red">{img link}</span>) 까지 업데이트 된다.
 
 ```vim
-$ npm install
-
-$ node resource_version_manager.js
+npm install
+node resource_version_manager.js
 ```
 
 #앞으로 해야할일들...
@@ -72,33 +72,3 @@ $ node resource_version_manager.js
 - 절대 경로 버그 수정.(현재는 모든 리소스 링크들에 대해 상대 경로만 지원한다)
 
 - 현재까지 생각나는건 여기까지...
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
