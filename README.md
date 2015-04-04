@@ -17,7 +17,7 @@
 
 - **resourceMap.json** 파일 설정
 
-	- **src* ***: resource 버전(file modify date 할당)을 체크하고 싶은 html 경로를 정의한다.
+	- **src**: resource 버전(file modify date 할당)을 체크하고 싶은 html 경로를 정의한다.
 
 	- **keyName**: 체크 후 버전이 할당 될 queryString <span style="color:red">{key name}</span> 을 정의한다.
 	```javascript
